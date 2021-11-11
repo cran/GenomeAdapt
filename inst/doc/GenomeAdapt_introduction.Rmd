@@ -1,0 +1,135 @@
+---
+title: "GenomeAdapt: Detecting Signatures of Local Adaptation Based on Ancestry Trajectories"
+
+author: "Xinghu Qin"
+#date: "`r Sys.Date()`"
+date: "11-09-2021"
+URL: https://github.com/xinghuq/GenomeAdapt
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Instruction for Package GenomeAdapt }
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+# Instruction
+
+This vignette demonstrates the implementation of *GenomeAdapt* for detecting signatures of local adaptation based on multidimensional ancestry trajectories ( _n_ * _n_ ancestry genetic trajectories, _n_ is the number of individuals). 
+If _n_ samples are included in the analysis, there will be _n_ dimensional spaces that represent the common ancestry maps based on the identity-by-descent (IBD). 
+
+The package calculates the correlations of loci with the common ancestry genetic maps adopting the Genomic Data Structure (GDS, Zheng et al., 2012) and suitable for millions of SNP data. Loci sharing a greater level of most recent common ancestor (MRCA) (large Z-scores) indicates a large number of individuals descend from recent common ancestors, which signals the rapid increase in frequency of a beneficial allele due to recent positive selection. The rationale underlying this package is somewhat analogous to KLFDAPT (Qin, 2021) (<https://xinghuq.github.io/KLFDAPC/articles/Genome_scan_KLFDAPC.html>). It combines the concept of IBD-based genome scan (Albrechtsen et al., 2010), iHS (Voight, 2006), and eigenanalysis of SNP data with an identity by descent interpretation (Zheng & Weir, 2016). It can also be interpreted as spatial varying selection as ancestry genetic maps reflect geographic origins.
+
+Besides the detection of local adaptation, this package also estimates the population admixtures and plots its geographic genetic structure. 
+
+
+# Practical analyses
+
+We use the Hapmap dataset as an example to show how you can detect signatures of local adaptation. 
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+##Install GenomeAdapt
+
+```{r, library}
+#Install from CRAN
+#install.packages("GenomeAdapt")
+## or you can get the latest version of HierDpart from github
+#library(devtools)
+#install_github("xinghuq/GenomeAdapt")
+
+library("GenomeAdapt")
+
+
+```
+
+```{r}
+# example genepop file
+# using Hapmap data
+#Do genome scan
+HapmapScan=GenomeAdapt.gds(genfile = SNPRelate::snpgdsExampleFileName(),method="EIGMIX",num.thread = 6, autosome.only=TRUE, remove.monosnp=TRUE, maf=0.01, missing.rate=0.1)
+
+## it takes a while to finish this
+
+
+```
+
+
+## Estimating the ancestry proportion and plot the ancestry admixture 
+
+We can use the IBD-based eigen analysis to estimate the ancestry proportion. Below, we show the estimation of ancestry using AdmixProt function.
+
+```{r fig1, fig.height = 5, fig.width = 8.5, fig.align = "center"}
+# get population information
+library(SNPRelate)
+genofile <- SNPRelate::snpgdsOpen(SNPRelate::snpgdsExampleFileName())
+pop_code <- read.gdsn(index.gdsn(genofile, "sample.annot/pop.group"))
+
+# get sample id
+samp.id <- read.gdsn(index.gdsn(genofile, "sample.id"))
+snpgdsClose(genofile)
+
+# define groups
+groups <- list(CEU = samp.id[pop_code == "CEU"],
+    YRI = samp.id[pop_code == "YRI"],
+    CHB = samp.id[is.element(pop_code, c("HCB", "JPT"))])
+
+### estimate the ancestry proportion
+
+Admixpro=AdmixProp(HapmapScan,groups=groups,bound=TRUE)
+
+PlotAdmix(Admixpro,group=as.factor(pop_code), xlab="Individuals",multiplot = FALSE)
+
+```
+
+Fig.1. The ancestry admixture plot for Hapmap dataset.
+
+## The population genetic structure
+
+We can not plot the n X n dimensional spaces in one plot. But we can decomposed them into the eigen spaces, this will be the same as the population structure, representing the ancestry map. We can plot the pairwise population structure from the eigen vectors.
+
+```{r fig2, fig.height = 10, fig.width = 10, fig.align = "center"} 
+
+pairs(HapmapScan$eig$vectors[,1:10], col = as.factor(pop_code), pch = 19)
+
+
+```
+
+Fig. 2. The pairwise population structure derived from IBD.
+
+## Plot the Manhattan plot  
+
+We can get the z-scores for loci relating to the ancestry trajectories from GenomeAdapt object, then plot the manhattan plot to show the p-values.
+
+```{r fig3, fig.height = 10, fig.width = 9, fig.align = "center"} 
+
+
+## Calculating the Z-score for loci  
+ Hapmapqval=zscores_qvals(HapmapScan)
+## plot
+
+ plotmanhattan(Hapmapqval$pvals$pvals$p.values,col=Hapmapqval$chr)
+
+```
+
+Fig.3. Manhattan plot of Hapmap dataset for detecting signals of local adaptation.
+
+
+
+# References
+
+Laloë, D., Jombart, T., Dufour, A.-B. & Moazami-Goudarzi, K. (2007). Consensus genetic structuring and typological value of markers using multiple coinertia analysis. Genetics Selection Evolution, 39, 545.
+
+Qin, X., Chiang, C. W., & Gaggiotti, O. E. (2021). Kernel Local Fisher Discriminant Analysis of Principal Components (KLFDAPC) significantly improves the accuracy of predicting geographic origin of individuals. bioRxiv.
+
+Zheng, X., & Weir, B. S. (2016). Eigenanalysis of SNP data with an identity by descent interpretation. Theoretical population biology, 107, 65-76.
+
+Albrechtsen, A., Moltke, I., & Nielsen, R. (2010). Natural selection and the distribution of identity-by-descent in the human genome. Genetics, 186(1), 295-308.
+
+Duforet-Frebourg, N., Luu, K., Laval, G., Bazin, E., & Blum, M. G. (2016). Detecting genomic signatures of natural selection with principal component analysis: application to the 1000 genomes data. Molecular biology and evolution, 33(4), 1082-1093.
+
+Zheng, X., Levine, D., Shen, J., Gogarten, S. M., Laurie, C., & Weir, B. S. (2012). A high-performance computing toolset for relatedness and principal component analysis of SNP data. Bioinformatics, 28(24), 3326-3328.
